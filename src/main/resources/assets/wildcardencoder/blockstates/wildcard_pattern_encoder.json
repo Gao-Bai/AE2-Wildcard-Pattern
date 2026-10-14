@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "wildcardencoder:block/wildcard_pattern_encoder"
+    }
+  }
+}

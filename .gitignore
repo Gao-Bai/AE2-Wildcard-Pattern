@@ -1,0 +1,25 @@
+# Gradle / ForgeGradle
+.gradle/
+build/
+out/
+run/
+run-data/
+src/generated/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+
+# Local AE2 jar fallback
+libs/*.jar
+
+# Archived builds stay local; only the current jar is committed
+# (older versions belong in the GitHub releases page)
+dist/old/

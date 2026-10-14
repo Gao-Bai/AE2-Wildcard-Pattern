@@ -1,0 +1,14 @@
+{
+  "criteria": {
+    "tick": {
+      "trigger": "minecraft:tick"
+    }
+  },
+  "rewards": {
+    "recipes": [
+      "wildcardencoder:wildcard_pattern_encoder",
+      "wildcardencoder:wildcard_pattern_provider",
+      "wildcardencoder:wildcard_pattern"
+    ]
+  }
+}

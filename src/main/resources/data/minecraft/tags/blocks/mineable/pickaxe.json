@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "wildcardencoder:wildcard_pattern_encoder",
+    "wildcardencoder:wildcard_pattern_provider"
+  ]
+}
