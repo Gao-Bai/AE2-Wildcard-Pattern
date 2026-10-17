@@ -95,5 +95,9 @@
   "wildcardencoder.gui.kind.tip.mod": "%s - match every item of one mod",
   "wildcardencoder.gui.hint.added_nbt": "Added %s (with its NBT data)",
   "wildcardencoder.gui.use_typed": "use the text I typed",
-  "wildcardencoder.gui.status.recipes": "Recipes it would generate:"
+  "wildcardencoder.gui.status.recipes": "Recipes it would generate:",
+  "wildcardencoder.gui.kind.pattern": "ID*",
+  "wildcardencoder.gui.kind.tip.pattern": "%s - match by item id, the '*' captures the material, e.g. gtceu:*_single_wire",
+  "wildcardencoder.msg.warn.pattern_needs_wildcard": "An ID pattern needs a '*': %s",
+  "wildcardencoder.msg.warn.pattern_no_match": "No item id matches this pattern: %s"
 }

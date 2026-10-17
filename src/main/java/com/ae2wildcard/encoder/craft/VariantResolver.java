@@ -65,6 +65,7 @@ public final class VariantResolver {
                 }
             }
             case FAMILY -> resolveFamily(match, variants, warnings);
+            case PATTERN -> resolvePattern(match, variants, warnings);
             case MOD -> {
                 String namespace = match.value().toLowerCase(Locale.ROOT);
                 for (Item item : ForgeRegistries.ITEMS) {
@@ -126,6 +127,61 @@ public final class VariantResolver {
         for (ResourceLocation root : roots) {
             TagIndex.get().collectVariants(root, variants);
         }
+    }
+
+    /**
+     * Matches every item id against a glob such as {@code gtceu:*_single_wire}. The text captured by
+     * the first {@code *} becomes the variant name (the material), which is what lets a PATTERN output
+     * bind to a {@code ingot*} input by material instead of pinning one concrete item.
+     */
+    private static void resolvePattern(Match match, Map<String, List<Item>> variants,
+            List<Msg> warnings) {
+        String glob = match.value();
+        if (glob.indexOf('*') < 0 && glob.indexOf('?') < 0) {
+            warnings.add(Msg.of(Msg.WARN_PATTERN_NEEDS_WILDCARD, glob));
+            return;
+        }
+        java.util.regex.Pattern regex = globToRegex(glob);
+        java.util.regex.Matcher matcher = regex.matcher("");
+        for (Item item : ForgeRegistries.ITEMS) {
+            ResourceLocation id = ForgeRegistries.ITEMS.getKey(item);
+            if (id == null) {
+                continue;
+            }
+            matcher.reset(id.toString());
+            if (!matcher.matches()) {
+                continue;
+            }
+            String variant = matcher.groupCount() >= 1 && matcher.group(1) != null
+                    ? matcher.group(1)
+                    : id.toString();
+            add(variants, variant, item);
+        }
+        if (variants.isEmpty()) {
+            warnings.add(Msg.of(Msg.WARN_PATTERN_NO_MATCH, glob));
+        }
+    }
+
+    /** Glob to regex: the first '*' becomes a capture group, later ones are plain wildcards. */
+    private static java.util.regex.Pattern globToRegex(String glob) {
+        StringBuilder regex = new StringBuilder("^");
+        boolean captured = false;
+        for (int i = 0; i < glob.length(); i++) {
+            char c = glob.charAt(i);
+            if (c == '*') {
+                if (!captured) {
+                    regex.append("(.*)");
+                    captured = true;
+                } else {
+                    regex.append(".*");
+                }
+            } else if (c == '?') {
+                regex.append('.');
+            } else {
+                regex.append(java.util.regex.Pattern.quote(String.valueOf(c)));
+            }
+        }
+        return java.util.regex.Pattern.compile(regex.append('$').toString());
     }
 
     private static void add(Map<String, List<Item>> variants, String key, Item item) {

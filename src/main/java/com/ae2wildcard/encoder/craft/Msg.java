@@ -42,6 +42,9 @@ public record Msg(String key, List<String> args) {
     public static final String WARN_NO_MOD_ITEMS = "wildcardencoder.msg.warn.no_mod_items";
     public static final String WARN_FAMILY_NEEDS_STAR = "wildcardencoder.msg.warn.family_needs_star";
     public static final String WARN_NO_FAMILY = "wildcardencoder.msg.warn.no_family";
+    public static final String WARN_PATTERN_NEEDS_WILDCARD =
+            "wildcardencoder.msg.warn.pattern_needs_wildcard";
+    public static final String WARN_PATTERN_NO_MATCH = "wildcardencoder.msg.warn.pattern_no_match";
 
     private static final int MAX_KEY = 128;
     private static final int MAX_ARG = 512;

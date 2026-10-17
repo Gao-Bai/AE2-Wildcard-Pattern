@@ -82,6 +82,9 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
     private static final int OUT_MINUS_X = 96;
     private static final int OUT_PLUS_X = 140;
     private static final int COUNT_BUTTON = 14;
+    /** Kind buttons: five of them have to fit into the row width. */
+    private static final int KIND_STRIDE = 40;
+    private static final int KIND_WIDTH = 38;
 
     /** Matcher overlay: kind buttons / search row / results, all inside the content area. */
     private static final int MATCHER_SEARCH_Y = CONTENT_Y + 2;
@@ -470,8 +473,9 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
         if (index < 0) {
             return;
         }
-        int x = leftPos + ROW_X + index * 50;
-        graphics.fill(x, topPos + MATCHER_KIND_Y + 14, x + 48, topPos + MATCHER_KIND_Y + 16, COLOR_ACCENT);
+        int x = leftPos + ROW_X + index * KIND_STRIDE;
+        graphics.fill(x, topPos + MATCHER_KIND_Y + 14, x + KIND_WIDTH, topPos + MATCHER_KIND_Y + 16,
+                COLOR_ACCENT);
     }
 
     /** Tooltips for the search bar and the kind buttons, so both are self explanatory. */
@@ -480,10 +484,10 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
         if (inside(mouseX, mouseY, x, topPos + MATCHER_SEARCH_Y, ROW_W - 108, 14)) {
             return Component.translatable("wildcardencoder.gui.search.tip");
         }
-        MatchKind kind = kindForQuery(searchQuery);
-        for (MatchKind candidate : MatchKind.values()) {
+        for (MatchKind candidate : kindOrder()) {
             int index = kindIndex(candidate);
-            if (index < 0 || !inside(mouseX, mouseY, x + index * 50, topPos + MATCHER_KIND_Y, 48, 14)) {
+            if (index < 0 || !inside(mouseX, mouseY, x + index * KIND_STRIDE, topPos + MATCHER_KIND_Y,
+                    KIND_WIDTH, 14)) {
                 continue;
             }
             return Component.translatable("wildcardencoder.gui.kind.tip."
@@ -1294,54 +1298,22 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
             return List.copyOf(results);
         }
         List<ItemSearch.Entry> out = new ArrayList<>(results);
-        boolean looksLikeId = (query != null && query.contains(":")) || (query != null
-                && (query.startsWith("#") || query.startsWith("@")));
-        if (looksLikeId) {
-            out.add(0, typed);
-        } else {
-            out.add(typed);
-        }
+        out.add(typed);
         return List.copyOf(out);
     }
 
+    /**
+     * The "use exactly this text" row. Always offered (a player may want to type a pattern such as
+     * {@code gtceu:*_single_wire} or a tag id), but always appended so the first row stays a real match.
+     */
     private ItemSearch.Entry typedEntry(String query, MatchKind wanted) {
         String text = query == null ? "" : query.trim();
         String value = text.startsWith("#") || text.startsWith("@") ? text.substring(1) : text;
-        if (value.isEmpty() || !isUsableValue(value, wanted)) {
+        if (value.isEmpty()) {
             return null;
         }
         return new ItemSearch.Entry(wanted, value, null, text,
                 tr("wildcardencoder.gui.use_typed"));
-    }
-
-    /**
-     * A typed value is only offered when it would really resolve. A partial id like
-     * {@code gtceu:single_wire} (the actual items are {@code gtceu:<material>_single_wire}) must not
-     * become the selected row - that would silently create a rule matching nothing.
-     */
-    private boolean isUsableValue(String value, MatchKind wanted) {
-        switch (wanted) {
-            case ITEM -> {
-                ResourceLocation id = ResourceLocation.tryParse(
-                        value.contains(":") ? value : "minecraft:" + value);
-                Item item = id == null ? null : ForgeRegistries.ITEMS.getValue(id);
-                return item != null && item != Items.AIR;
-            }
-            case TAG -> {
-                ResourceLocation id = ResourceLocation.tryParse(
-                        value.contains(":") ? value : "forge:" + value);
-                return id != null && TagIndex.get().hasTag(id);
-            }
-            case FAMILY -> {
-                return value.endsWith("*") || WildcardAliases.resolve(value) != null;
-            }
-            case MOD -> {
-                return WildcardConfig.allowModMatcher() && value.indexOf(':') < 0;
-            }
-            default -> {
-                return false;
-            }
-        }
     }
 
     /** The item the query talks about, or the item row the player selected. */
@@ -1421,6 +1393,12 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
                     out.add(ItemSearch.Entry.tag(tag.location().toString()));
                 } else if (wanted == MatchKind.FAMILY) {
                     out.add(ItemSearch.Entry.family(familyToken(tag.location())));
+                } else if (wanted == MatchKind.PATTERN) {
+                    String pattern = idPattern(item, tag.location());
+                    if (pattern != null) {
+                        out.add(new ItemSearch.Entry(MatchKind.PATTERN, pattern, null, pattern,
+                                tr("wildcardencoder.gui.kind.pattern")));
+                    }
                 }
                 if (out.size() >= 24) {
                     break;
@@ -1430,6 +1408,27 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
             return List.of();
         }
         return List.copyOf(new java.util.LinkedHashSet<>(out));
+    }
+
+    /**
+     * "gtceu:copper_single_wire" plus the tag "forge:wires/copper" becomes "gtceu:*_single_wire":
+     * the material of the tag is replaced by a wildcard, which is what makes the rule cross-material.
+     */
+    private static String idPattern(Item item, ResourceLocation tag) {
+        ResourceLocation id = ForgeRegistries.ITEMS.getKey(item);
+        if (id == null) {
+            return null;
+        }
+        String path = tag.getPath();
+        String material = path.substring(path.lastIndexOf('/') + 1);
+        if (material.length() < 2) {
+            return null;
+        }
+        String text = id.toString();
+        if (!text.contains(material)) {
+            return null;
+        }
+        return text.replace(material, "*");
     }
 
     private static Item itemFromQuery(String query) {
@@ -1469,14 +1468,17 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
         return editorKind;
     }
 
+    /** Order of the kind buttons: the buttons, the underline and the tooltips all use this index. */
+    private static List<MatchKind> kindOrder() {
+        if (WildcardConfig.allowModMatcher()) {
+            return List.of(MatchKind.ITEM, MatchKind.TAG, MatchKind.FAMILY, MatchKind.PATTERN,
+                    MatchKind.MOD);
+        }
+        return List.of(MatchKind.ITEM, MatchKind.TAG, MatchKind.FAMILY, MatchKind.PATTERN);
+    }
+
     private int kindIndex(MatchKind kind) {
-        return switch (kind) {
-            case ITEM -> 0;
-            case TAG -> 1;
-            case FAMILY -> 2;
-            case MOD -> 3;
-            default -> -1;
-        };
+        return kindOrder().indexOf(kind);
     }
 
     private void openMatcherEditor(MatcherTarget target, int index, Match existing) {
@@ -1538,10 +1540,7 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
 
         // second row: what kind of matcher is being built
         int y = topPos + MATCHER_KIND_Y;
-        List<MatchKind> kinds = new ArrayList<>(List.of(MatchKind.ITEM, MatchKind.TAG, MatchKind.FAMILY));
-        if (WildcardConfig.allowModMatcher()) {
-            kinds.add(MatchKind.MOD);
-        }
+        List<MatchKind> kinds = kindOrder();
         for (int i = 0; i < kinds.size(); i++) {
             MatchKind kind = kinds.get(i);
             addOverlayWidget(Button.builder(kindLabel(kind), b -> {
@@ -1549,7 +1548,7 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
                 selected = 0;
                 results = searchResults(searchQuery);
                 matcherWidgetsDirty = true;
-            }).bounds(leftPos + ROW_X + i * 50, y, 48, 14).build());
+            }).bounds(leftPos + ROW_X + i * KIND_STRIDE, y, KIND_WIDTH, 14).build());
         }
     }
 

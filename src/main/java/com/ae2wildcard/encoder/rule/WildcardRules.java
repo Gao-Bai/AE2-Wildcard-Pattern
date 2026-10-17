@@ -65,6 +65,8 @@ public record WildcardRules(List<Input> inputs, List<Output> outputs, List<Exclu
         FAMILY,
         /** every item of one mod namespace */
         MOD,
+        /** an item id pattern, e.g. gtceu:*_single_wire - the first '*' captures the material name */
+        PATTERN,
         /** everything (debug only, disabled by default) */
         ANY;
 
@@ -124,6 +126,7 @@ public record WildcardRules(List<Input> inputs, List<Output> outputs, List<Exclu
                 case TAG -> "#" + value;
                 case FAMILY -> value;
                 case MOD -> "@" + value;
+                case PATTERN -> value;
                 case ANY -> "*";
             };
         }

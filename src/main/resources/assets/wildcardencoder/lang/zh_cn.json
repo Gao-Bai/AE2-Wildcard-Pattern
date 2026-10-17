@@ -95,5 +95,9 @@
   "wildcardencoder.gui.kind.tip.mod": "%s —— 匹配某个模组的所有物品",
   "wildcardencoder.gui.hint.added_nbt": "已添加 %s（含 NBT 数据）",
   "wildcardencoder.gui.use_typed": "使用输入的内容",
-  "wildcardencoder.gui.status.recipes": "将会生成的配方："
+  "wildcardencoder.gui.status.recipes": "将会生成的配方：",
+  "wildcardencoder.gui.kind.pattern": "ID*",
+  "wildcardencoder.gui.kind.tip.pattern": "%s —— 按物品 ID 匹配，`*` 捕获材料名（参与组绑定），如 gtceu:*_single_wire",
+  "wildcardencoder.msg.warn.pattern_needs_wildcard": "ID 模式需要包含 '*'：%s",
+  "wildcardencoder.msg.warn.pattern_no_match": "没有物品 id 匹配这个模式：%s"
 }

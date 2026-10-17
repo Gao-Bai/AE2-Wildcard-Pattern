@@ -56,6 +56,24 @@ def strip_affix(item_path: str, family: str) -> str:
     return item_path
 
 
+ALL_ITEMS: list = []
+
+
+def glob_to_regex(glob: str):
+    """Mirror of VariantResolver.globToRegex: the first '*' captures, later ones do not."""
+    parts, captured = ["^"], False
+    for ch in glob:
+        if ch == "*":
+            parts.append("(.*)" if not captured else ".*")
+            captured = True
+        elif ch == "?":
+            parts.append(".")
+        else:
+            parts.append(re.escape(ch))
+    parts.append("$")
+    return re.compile("".join(parts))
+
+
 @dataclass
 class TagIndex:
     tags: dict[str, list[str]] = field(default_factory=dict)
@@ -181,6 +199,14 @@ def resolve(index: TagIndex, match: Match) -> dict[str, list[str]]:
                 for item in items:
                     if item not in variants[k]:
                         variants[k].append(item)
+    elif match.kind == "pattern":
+        regex = glob_to_regex(match.value)
+        for item in ALL_ITEMS:
+            found = regex.match(item)
+            if not found:
+                continue
+            variant = found.group(1) if found.groups() else item
+            variants.setdefault(variant, []).append(item)
     elif match.kind == "mod":
         namespace = match.value
         for tag in index.tags.values():
@@ -333,14 +359,18 @@ def instantiate(index: TagIndex, rules: Rules) -> Result:
 # --------------------------------------------------------------------------- fixture + tests
 
 def build_index() -> TagIndex:
+    ALL_ITEMS.clear()
+    ALL_ITEMS.extend(["gtceu:copper_single_wire", "gtceu:black_steel_single_wire",
+                      "gtceu:tin_single_wire", "gtceu:platinum_single_wire"])
     return TagIndex({
         "forge:ingots": ["minecraft:iron_ingot", "minecraft:copper_ingot", "minecraft:gold_ingot",
-                         "testmod:tin_ingot", "othermod:lead_ingot"],
+                         "testmod:tin_ingot", "othermod:lead_ingot", "gtceu:black_steel_ingot"],
         "forge:ingots/iron": ["minecraft:iron_ingot", "othermod:iron_ingot"],
         "forge:ingots/copper": ["minecraft:copper_ingot"],
         "forge:ingots/gold": ["minecraft:gold_ingot"],
         "forge:ingots/tin": ["testmod:tin_ingot"],
         "forge:ingots/lead": ["othermod:lead_ingot"],
+        "forge:ingots/black_steel": ["gtceu:black_steel_ingot"],
         "forge:plates": ["testmod:iron_plate", "testmod:copper_plate", "testmod:tin_plate",
                          "othermod:iron_plate", "othermod:lead_plate"],
         "forge:plates/iron": ["testmod:iron_plate", "othermod:iron_plate"],
@@ -433,6 +463,22 @@ def main() -> None:
     show("... with one optional input (maxOptionalExpansion = 1)", optional)
     assert any(len(p["inputs"]) == 1 for p in optional.patterns)
     assert any(len(p["inputs"]) == 2 for p in optional.patterns)
+
+    # 10. PATTERN output: gtceu:*_single_wire pairs the material with ingot*
+    pattern_rule = Rules((Input(fam_ingot, 1, "A"),),
+                         (Output(Match("pattern", "gtceu:*_single_wire"), 1, "A"),))
+    paired = instantiate(index, pattern_rule)
+    show("ingot*(A) -> gtceu:*_single_wire(A)", paired)
+    by_input = {p["inputs"][0][0]: p["outputs"][0][0] for p in paired.patterns}
+    assert by_input.get("gtceu:black_steel_ingot") == "gtceu:black_steel_single_wire", by_input
+    assert by_input.get("minecraft:copper_ingot") == "gtceu:copper_single_wire", by_input
+    assert by_input.get("testmod:tin_ingot") == "gtceu:tin_single_wire", by_input
+    assert all(k.rsplit(":", 1)[0] == "gtceu" for k in by_input.values())
+    print("  ok  each ingot maps to the wire of the same material")
+
+    # 11. without the wildcard there is nothing to pair
+    assert glob_to_regex("gtceu:*_single_wire").match("gtceu:black_steel_single_wire").group(1) \
+        == "black_steel"
 
     print("\nAll v2 rule-engine assertions passed.")
 

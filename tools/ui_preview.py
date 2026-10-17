@@ -205,7 +205,8 @@ def build_matcher(help_unused: bool = False) -> Image.Image:
 
     search_y = CONTENT_Y + 2
     # collapsed search bar: one click expands it into a text field
-    button(d, ROW_X, search_y, ROW_W - 108, 14, "搜索物品 / #标签 / @模组")
+    rect(d, ROW_X, search_y, ROW_W - 108, 14, (0x1E, 0x1E, 0x1E))
+    text(d, "gtceu:single_wire_", ROW_X + 4, search_y + 3, (0xE8, 0xE8, 0xE8), SMALL)
     button(d, ROW_X + ROW_W - 104, search_y, 32, 14, "NBT")
     button(d, ROW_X + ROW_W - 68, search_y, 32, 14, "确定")
     button(d, ROW_X + ROW_W - 34, search_y, 32, 14, "取消")
@@ -219,8 +220,8 @@ def build_matcher(help_unused: bool = False) -> Image.Image:
     height = MATCHER_ROWS * MATCHER_ROW_H + 2
     rect(d, ROW_X, list_y, ROW_W, height, PANEL)
     sunken(d, ROW_X, list_y, ROW_W, height)
-    rows = [("铁锭", "minecraft:iron_ingot"), ("铜锭", "minecraft:copper_ingot"),
-            ("锡锭", "testmod:tin_ingot")]
+    rows = [("铝导线", "gtceu:aluminium_single_wire"), ("钴导线", "gtceu:cobalt_single_wire"),
+            ("黑钢导线", "gtceu:black_steel_single_wire")]
     for i, (title, subtitle) in enumerate(rows):
         row_y = list_y + 1 + i * MATCHER_ROW_H
         if i == 1:
@@ -228,8 +229,8 @@ def build_matcher(help_unused: bool = False) -> Image.Image:
         slot(d, ROW_X + 3, row_y + 1)
         rect(d, ROW_X + 6, row_y + 4, 10, 10, (0xD8, 0xD8, 0xD8))
         text(d, title, ROW_X + 24, row_y + 5, TEXT if i == 1 else DIM)
-        text(d, subtitle[:13], ROW_X + 104, row_y + 5, DIM, SMALL)
-    info = "2/64"
+        text(d, subtitle[:19], ROW_X + 104, row_y + 5, DIM, SMALL)
+    info = "1/65"
     text(d, info, ROW_X + ROW_W - 24, list_y + height - MATCHER_ROW_H + 2, DIM, SMALL)
 
     for x, w, label in ((8, 36, "+"), (46, 40, "编码"), (88, 34, "选项"), (124, 30, "复制"),
