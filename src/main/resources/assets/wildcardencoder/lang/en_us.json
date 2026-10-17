@@ -93,5 +93,7 @@
   "wildcardencoder.gui.kind.tip.tag": "%s - match every item of one tag, e.g. forge:ingots",
   "wildcardencoder.gui.kind.tip.family": "%s - match a whole material family, e.g. ingot* or plate*",
   "wildcardencoder.gui.kind.tip.mod": "%s - match every item of one mod",
-  "wildcardencoder.gui.hint.added_nbt": "Added %s (with its NBT data)"
+  "wildcardencoder.gui.hint.added_nbt": "Added %s (with its NBT data)",
+  "wildcardencoder.gui.use_typed": "use the text I typed",
+  "wildcardencoder.gui.status.recipes": "Recipes it would generate:"
 }

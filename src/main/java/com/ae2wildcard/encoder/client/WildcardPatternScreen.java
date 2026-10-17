@@ -40,6 +40,7 @@ import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
@@ -152,6 +153,8 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
     /** Matcher overlay: the search bar is collapsed until clicked, and widgets are rebuilt lazily. */
     private boolean searchExpanded;
     private String searchQuery = "";
+    /** Last result row the player clicked; used as the item context when switching kinds. */
+    private ItemSearch.Entry pickedEntry;
     private boolean matcherWidgetsDirty;
     /**
      * True when the current click already added a rule. A plain click over the list fires
@@ -342,6 +345,8 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
             drawSlot(graphics, x + slot.x, y + slot.y);
         }
 
+        // Only short facts on the line itself; the full text (recipes, warnings, errors) is in the
+        // hover tooltip, otherwise it gets cut off in the middle of a recipe.
         String status = Component.translatable("wildcardencoder.gui.status", previewCount, excludedCount).getString();
         if (rowCount() > ROWS) {
             status = status + "  " + (scroll + 1) + "/" + rowCount();
@@ -352,15 +357,15 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
             drawClipped(graphics, hint, x + 8, y + STATUS_Y, COLOR_INFO, W - 16);
         } else {
             draw(graphics, status, x + 8, y + STATUS_Y, truncated ? COLOR_INFO : COLOR_OK);
-            String tail = !serverWarnings.isEmpty() ? serverWarnings.get(0).plain()
-                    : (samples.isEmpty() ? "" : samples.get(0));
-            int tailX = x + 10 + font.width(status);
-            int tailMax = x + W - 8 - tailX;
-            if (!tail.isEmpty() && tailMax > 30) {
-                drawClipped(graphics, tail, tailX, y + STATUS_Y,
-                        serverWarnings.isEmpty() ? COLOR_DIM : COLOR_INFO, tailMax);
+            boolean hasMore = !samples.isEmpty() || !serverWarnings.isEmpty();
+            if (hasMore) {
+                int dotX = x + 12 + font.width(status);
+                if (dotX < x + W - 12) {
+                    draw(graphics, "...", dotX, y + STATUS_Y, COLOR_DIM);
+                }
             }
         }
+
 
         draw(graphics, Component.translatable("container.inventory").getString(), x + 8, y + INV_LABEL_Y, COLOR_DIM);
 
@@ -412,6 +417,10 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
             }
         }
         if (overlay == Overlay.NONE) {
+            if (isOverStatus(mouseX, mouseY)) {
+                graphics.renderTooltip(this.font, statusTooltip(), mouseX, mouseY);
+                return;
+            }
             int hoveredRow = rowAt(mouseX, mouseY);
             Component tip = toggleTooltip(hoveredRow, mouseX);
             if (tip == null) {
@@ -424,6 +433,35 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
                 graphics.renderTooltip(this.font, tip, mouseX, mouseY);
             }
         }
+    }
+
+    /** The status line is short on purpose; hovering it shows counts, recipes and warnings in full. */
+    private Component statusTooltip() {
+        MutableComponent tip = Component.translatable("wildcardencoder.gui.status", previewCount, excludedCount);
+        if (truncated) {
+            tip.append(Component.literal(" (!)").withStyle(ChatFormatting.GOLD));
+        }
+        if (!samples.isEmpty()) {
+            tip.append(Component.literal("\n" + tr("wildcardencoder.gui.status.recipes"))
+                    .withStyle(ChatFormatting.GRAY));
+            for (String sample : samples) {
+                tip.append(Component.literal("\n  " + sample).withStyle(ChatFormatting.GRAY));
+            }
+        }
+        for (Msg warning : serverWarnings) {
+            tip.append(Component.literal("\n! " + warning.plain()).withStyle(ChatFormatting.GOLD));
+        }
+        if (serverError != null) {
+            tip.append(Component.literal("\n" + serverError.plain()).withStyle(ChatFormatting.RED));
+        } else if (!hint.isEmpty()) {
+            tip.append(Component.literal("\n" + hint).withStyle(ChatFormatting.AQUA));
+        }
+        return tip;
+    }
+
+    private boolean isOverStatus(double mouseX, double mouseY) {
+        return mouseX >= leftPos + 8 && mouseX <= leftPos + W - 8
+                && mouseY >= topPos + STATUS_Y - 2 && mouseY <= topPos + STATUS_Y + 10;
     }
 
     /** Cyan bar under the kind button that is in effect, like the active tab. */
@@ -790,7 +828,13 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
                     match.value().contains(":") ? match.value() : "minecraft:" + match.value());
             var item = id == null ? null : ForgeRegistries.ITEMS.getValue(id);
             if (item != null && item != Items.AIR) {
-                return Component.translatable(item.getDescriptionId()).getString();
+                // NOT Component.translatable(getDescriptionId()): material based mods (GregTech, ...)
+                // build names from a composite key, so that would print the raw "%s ingot".
+                ItemStack stack = new ItemStack(item);
+                if (match.hasNbt()) {
+                    stack.setTag(match.nbt().copy());
+                }
+                return stack.getHoverName().getString();
             }
         }
         return PatternText.plainMatch(match);
@@ -895,8 +939,7 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
                     RuleCodec.writeInput(new Input(match, 1, "A", true, false)));
         }
         hint = Component.translatable(stack.hasTag() ? "wildcardencoder.gui.hint.added_nbt"
-                : "wildcardencoder.gui.hint.added",
-                Component.translatable(stack.getDescriptionId()).getString()).getString();
+                : "wildcardencoder.gui.hint.added", stack.getHoverName().getString()).getString();
         scroll = Integer.MAX_VALUE;
         clampScroll();
     }
@@ -964,6 +1007,7 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
         int index = firstVisibleResult() + row;
         if (row >= 0 && row < MATCHER_ROWS && index >= 0 && index < results.size()) {
             selected = index;
+            pickedEntry = results.get(index);
             return true;
         }
         return false;
@@ -1209,11 +1253,15 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
     /**
      * Results for the query, restricted to the matcher kind the player picked.
      *
-     * <p>The query is usually a concrete item id (editing a rule starts from its value), which matches
-     * nothing in the tag or family lists. In that case the tags / families that item really belongs to
-     * are offered instead - which is what you actually want after picking an item and clicking #tag or
-     * the family button. If there is no item context at all, every entry of that kind is shown, so the
-     * list is never empty.
+     * <p>Order of preference:
+     * <ol>
+     * <li>entries of that kind that match the text;</li>
+     * <li>the tags / families of the item the query or the selected row refers to (this is how you go
+     *     from "tin single wire" to {@code forge:wires/tin});</li>
+     * <li>nothing typed yet: everything of that kind, so there is something to browse;</li>
+     * <li>otherwise a single "use what I typed" row, so a raw tag / item id can be confirmed directly.
+     *     Never the whole registry - that only looks like a broken filter.</li>
+     * </ol>
      */
     private List<ItemSearch.Entry> searchResults(String query) {
         MatchKind wanted = kindForQuery(query);
@@ -1224,13 +1272,60 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
             }
         }
         if (!filtered.isEmpty()) {
-            return List.copyOf(filtered);
+            return withTypedEntry(filtered, query, wanted);
         }
-        List<ItemSearch.Entry> related = relatedEntries(query, wanted);
+        List<ItemSearch.Entry> related = relatedEntries(contextItem(query), wanted);
         if (!related.isEmpty()) {
-            return related;
+            return withTypedEntry(related, query, wanted);
         }
-        return everythingOf(wanted);
+        if (query.isBlank() && wanted != MatchKind.ITEM) {
+            return everythingOf(wanted);
+        }
+        ItemSearch.Entry typed = typedEntry(query, wanted);
+        return typed == null ? List.of() : List.of(typed);
+    }
+
+    /** Appends a "use exactly this text" row, so typed ids can be confirmed without picking a match. */
+    private List<ItemSearch.Entry> withTypedEntry(List<ItemSearch.Entry> results, String query,
+            MatchKind wanted) {
+        ItemSearch.Entry typed = typedEntry(query, wanted);
+        if (typed == null) {
+            return List.copyOf(results);
+        }
+        List<ItemSearch.Entry> out = new ArrayList<>(results);
+        boolean looksLikeId = (query != null && query.contains(":")) || (query != null
+                && (query.startsWith("#") || query.startsWith("@")));
+        if (looksLikeId) {
+            out.add(0, typed);
+        } else {
+            out.add(typed);
+        }
+        return List.copyOf(out);
+    }
+
+    private ItemSearch.Entry typedEntry(String query, MatchKind wanted) {
+        String text = query == null ? "" : query.trim();
+        String value = text.startsWith("#") || text.startsWith("@") ? text.substring(1) : text;
+        if (value.isEmpty()) {
+            return null;
+        }
+        return new ItemSearch.Entry(wanted, value, null, text,
+                tr("wildcardencoder.gui.use_typed"));
+    }
+
+    /** The item the query talks about, or the item row the player selected. */
+    private Item contextItem(String query) {
+        Item fromQuery = itemFromQuery(query);
+        if (fromQuery != null) {
+            return fromQuery;
+        }
+        if (pickedEntry != null && pickedEntry.kind() == MatchKind.ITEM) {
+            return itemFromQuery(pickedEntry.value());
+        }
+        ItemSearch.Entry selected = selectedEntry();
+        return selected != null && selected.kind() == MatchKind.ITEM
+                ? itemFromQuery(selected.value())
+                : null;
     }
 
     /**
@@ -1284,8 +1379,7 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
     }
 
     /** The tags / families a concrete item belongs to. */
-    private List<ItemSearch.Entry> relatedEntries(String query, MatchKind wanted) {
-        Item item = itemFromQuery(query);
+    private List<ItemSearch.Entry> relatedEntries(Item item, MatchKind wanted) {
         if (item == null || item == Items.AIR || wanted == MatchKind.ITEM) {
             return List.of();
         }
@@ -1371,6 +1465,7 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
             };
         }
         searchQuery = query;
+        pickedEntry = null;
         searchExpanded = false;
         results = searchResults(query);
         buildMatcherWidgets();
@@ -1386,6 +1481,7 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
             searchField.setResponder(value -> {
                 searchQuery = value;
                 selected = 0;
+                pickedEntry = null;
                 results = searchResults(value);
             });
             addOverlayWidget(searchField);

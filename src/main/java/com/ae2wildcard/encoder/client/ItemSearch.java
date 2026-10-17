@@ -111,7 +111,7 @@ public final class ItemSearch {
             }
             String path = id.getPath().toLowerCase(Locale.ROOT);
             String full = id.toString().toLowerCase(Locale.ROOT);
-            boolean hit = path.contains(query) || full.contains(query);
+            boolean hit = path.contains(query) || full.contains(query) || tokensMatch(full, query);
             if (!hit) {
                 String name = new ItemStack(item).getHoverName().getString().toLowerCase(Locale.ROOT);
                 hit = !name.isEmpty() && name.contains(query);
@@ -123,6 +123,25 @@ public final class ItemSearch {
         return out;
     }
 
+    /**
+     * Every ':'/'/'/'_'/' '-separated token of the query has to appear somewhere in the haystack, so
+     * "gtceu:single_wire" and "single wire" both find "gtceu:tin_single_wire".
+     */
+    private static boolean tokensMatch(String haystack, String query) {
+        String[] tokens = query.split("[:/\\s_]+");
+        int seen = 0;
+        for (String token : tokens) {
+            if (token.isEmpty()) {
+                continue;
+            }
+            if (!haystack.contains(token)) {
+                return false;
+            }
+            seen++;
+        }
+        return seen > 1; // a single token is already covered by the plain substring test
+    }
+
     private static void collectTags(String query, List<Entry> out, int limit) {
         Set<String> seen = new LinkedHashSet<>();
         for (ResourceLocation tag : TagIndex.get().tagNames()) {
@@ -130,7 +149,8 @@ public final class ItemSearch {
                 return;
             }
             String text = tag.toString();
-            if (query.isEmpty() || text.toLowerCase(Locale.ROOT).contains(query)) {
+            String lower = text.toLowerCase(Locale.ROOT);
+            if (query.isEmpty() || lower.contains(query) || tokensMatch(lower, query)) {
                 if (seen.add(text)) {
                     out.add(Entry.tag(text));
                 }

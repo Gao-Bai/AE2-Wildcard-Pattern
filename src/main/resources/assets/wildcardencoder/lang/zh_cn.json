@@ -93,5 +93,7 @@
   "wildcardencoder.gui.kind.tip.tag": "%s —— 匹配一个标签下的所有物品，如 forge:ingots",
   "wildcardencoder.gui.kind.tip.family": "%s —— 匹配一整族材料，如 ingot*、plate*",
   "wildcardencoder.gui.kind.tip.mod": "%s —— 匹配某个模组的所有物品",
-  "wildcardencoder.gui.hint.added_nbt": "已添加 %s（含 NBT 数据）"
+  "wildcardencoder.gui.hint.added_nbt": "已添加 %s（含 NBT 数据）",
+  "wildcardencoder.gui.use_typed": "使用输入的内容",
+  "wildcardencoder.gui.status.recipes": "将会生成的配方："
 }
