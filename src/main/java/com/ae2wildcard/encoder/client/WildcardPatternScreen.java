@@ -774,7 +774,8 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
                 graphics.renderItem(new ItemStack(entry.item()), x + 3, rowY + 1);
             } else {
                 drawSlot(graphics, x + 3, rowY + 1);
-                draw(graphics, "*", x + 8, rowY + 5, COLOR_INFO);
+                boolean typedRow = entry.subtitle().equals(tr("wildcardencoder.gui.use_typed"));
+                draw(graphics, typedRow ? "+" : "*", x + 7, rowY + 5, typedRow ? COLOR_OK : COLOR_INFO);
             }
             draw(graphics, entry.title(), x + 24, rowY + 5, active ? COLOR_TEXT : COLOR_DIM);
             // leave room for the "n/total" indicator in the bottom right corner
@@ -834,7 +835,7 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
                 if (match.hasNbt()) {
                     stack.setTag(match.nbt().copy());
                 }
-                return stack.getHoverName().getString();
+                return ItemSearch.displayName(stack);
             }
         }
         return PatternText.plainMatch(match);
@@ -1306,11 +1307,41 @@ public class WildcardPatternScreen extends AbstractContainerScreen<WildcardPatte
     private ItemSearch.Entry typedEntry(String query, MatchKind wanted) {
         String text = query == null ? "" : query.trim();
         String value = text.startsWith("#") || text.startsWith("@") ? text.substring(1) : text;
-        if (value.isEmpty()) {
+        if (value.isEmpty() || !isUsableValue(value, wanted)) {
             return null;
         }
         return new ItemSearch.Entry(wanted, value, null, text,
                 tr("wildcardencoder.gui.use_typed"));
+    }
+
+    /**
+     * A typed value is only offered when it would really resolve. A partial id like
+     * {@code gtceu:single_wire} (the actual items are {@code gtceu:<material>_single_wire}) must not
+     * become the selected row - that would silently create a rule matching nothing.
+     */
+    private boolean isUsableValue(String value, MatchKind wanted) {
+        switch (wanted) {
+            case ITEM -> {
+                ResourceLocation id = ResourceLocation.tryParse(
+                        value.contains(":") ? value : "minecraft:" + value);
+                Item item = id == null ? null : ForgeRegistries.ITEMS.getValue(id);
+                return item != null && item != Items.AIR;
+            }
+            case TAG -> {
+                ResourceLocation id = ResourceLocation.tryParse(
+                        value.contains(":") ? value : "forge:" + value);
+                return id != null && TagIndex.get().hasTag(id);
+            }
+            case FAMILY -> {
+                return value.endsWith("*") || WildcardAliases.resolve(value) != null;
+            }
+            case MOD -> {
+                return WildcardConfig.allowModMatcher() && value.indexOf(':') < 0;
+            }
+            default -> {
+                return false;
+            }
+        }
     }
 
     /** The item the query talks about, or the item row the player selected. */

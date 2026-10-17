@@ -90,10 +90,23 @@ def item_from_query(query):
     return value if value in ITEMS else None
 
 
+def usable_value(value, wanted):
+    """Mirror of isUsableValue: a typed value is only offered when it resolves."""
+    if wanted == "ITEM":
+        return value in ITEMS
+    if wanted == "TAG":
+        return value in TAGS
+    if wanted == "FAMILY":
+        return value.endswith("*") or value in ("ingot", "plate", "nugget", "gear")
+    if wanted == "MOD":
+        return ":" not in value
+    return False
+
+
 def typed_entry(query, wanted):
     value = query[1:] if query[:1] in ("#", "@") else query
     value = value.strip()
-    if not value:
+    if not value or not usable_value(value, wanted):
         return None
     return (wanted, value, "use the text I typed")
 
@@ -146,8 +159,10 @@ def main():
     print("\n1) tag mode, partial item query -> must not dump the registry:")
     got = search_results("gtceu:single_wire", "TAG")
     check("no registry dump", got, forbid="minecraft:air")
-    assert len(got) == 1 and got[0][0] == "TAG" and got[0][1] == "gtceu:single_wire"
-    print("  ok  only the 'use my text' row is offered")
+    # nothing resolves (there is no such tag and no such item), so nothing at all is offered;
+    # the GUI then shows "no match" instead of a misleading list
+    assert got == [], got
+    print("  ok  empty list -> the GUI shows 'no match'")
 
     print("\n2) tag mode after picking an item -> its tags:")
     got = search_results("single wire", "TAG", picked_item="gtceu:tin_single_wire")
@@ -175,6 +190,12 @@ def main():
     print("\n6) family mode from a picked item:")
     got = search_results("single wire", "FAMILY", picked_item="gtceu:tin_single_wire")
     print(f"  ok  families: {[e[1] for e in got]}")
+
+    print("\n7) a partial id must NOT offer a typed row (gtceu:single_wire is not an item):")
+    got = search_results("gtceu:single_wire", "ITEM")
+    assert all(not (e[1] == "gtceu:single_wire" and e[2] == "use the text I typed") for e in got)
+    assert any(e[1] == "gtceu:tin_single_wire" for e in got)
+    print(f"  ok  {len(got)} real matches, no bogus typed row: {[e[1] for e in got]}")
 
     print("\nAll search assertions passed.")
 

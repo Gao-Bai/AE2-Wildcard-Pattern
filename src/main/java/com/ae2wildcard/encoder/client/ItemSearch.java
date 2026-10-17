@@ -32,7 +32,7 @@ public final class ItemSearch {
     public record Entry(MatchKind kind, String value, Item item, String title, String subtitle) {
 
         public static Entry item(Item item, String id) {
-            return new Entry(MatchKind.ITEM, id, item, new ItemStack(item).getHoverName().getString(), id);
+            return new Entry(MatchKind.ITEM, id, item, displayName(new ItemStack(item)), id);
         }
 
         public static Entry tag(String tag) {
@@ -53,6 +53,14 @@ public final class ItemSearch {
     }
 
     private ItemSearch() {
+    }
+
+    /**
+     * Display name for our lists. GregTech's {@code includeAmountInItemName} option prefixes the count
+     * ("1x铝导线"), which is noise in a search list, so a leading {@code <number>x} is dropped.
+     */
+    public static String displayName(ItemStack stack) {
+        return stack.getHoverName().getString().replaceFirst("^\\d+x\\s*", "");
     }
 
     /** Family tokens, deduplicated per resolved tag so we show {@code ingot*} instead of {@code ingots*}. */
